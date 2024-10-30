@@ -372,6 +372,7 @@ cdef class CausalMSE(CausalRegressionCriterion):
         cdef double right_ct_var
         cdef double left_tr_var
         cdef double left_ct_var
+        cdef int min_samples_threshold = 5
 
         right_tau = self.get_tau(self.state.right)
         right_tr_var = self.get_variance(
@@ -385,13 +386,21 @@ cdef class CausalMSE(CausalRegressionCriterion):
         left_ct_var = self.get_variance(
             self.state.left.ct_y_sum, self.state.left.ct_y_sq_sum, self.state.left.ct_count)
 
-        impurity_left[0] = (left_tr_var / self.state.left.tr_count + left_ct_var / self.state.left.ct_count) - \
-                           left_tau * left_tau
-        impurity_right[0] = (right_tr_var / self.state.right.tr_count + right_ct_var / self.state.right.ct_count) - \
-                            right_tau * right_tau
-
-        impurity_left[0]  += self.get_groups_penalty(self.state.left.tr_count, self.state.left.ct_count)
-        impurity_right[0] += self.get_groups_penalty(self.state.right.tr_count, self.state.right.ct_count)
+        # Check if the left child has enough treatment/control samples
+        if self.state.left.tr_count < min_samples_threshold or self.state.left.ct_count < min_samples_threshold:
+            impurity_left[0] = INFINITY  # Reject this split by assigning a high impurity value
+        else:
+            impurity_left[0] = (left_tr_var / self.state.left.tr_count + left_ct_var / self.state.left.ct_count) - \
+                               left_tau * left_tau
+            impurity_left[0] += self.get_groups_penalty(self.state.left.tr_count, self.state.left.ct_count)
+    
+        # Check if the right child has enough treatment/control samples
+        if self.state.right.tr_count < min_samples_threshold or self.state.right.ct_count < min_samples_threshold:
+            impurity_right[0] = INFINITY  # Reject this split by assigning a high impurity value
+        else:
+            impurity_right[0] = (right_tr_var / self.state.right.tr_count + right_ct_var / self.state.right.ct_count) - \
+                                right_tau * right_tau
+            impurity_right[0] += self.get_groups_penalty(self.state.right.tr_count, self.state.right.ct_count)
 
 
 cdef class TTest(CausalRegressionCriterion):
